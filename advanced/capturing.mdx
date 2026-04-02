@@ -1,0 +1,148 @@
+---
+title: "Capturing arguments"
+description: "Capture arguments passed to MockK mocks using slots and lists for detailed assertions."
+keywords: ["mockk", "capturing", "CapturingSlot", "slot", "captureNullable", "captureLambda", "captureCoroutine"]
+---
+
+Capturing lets you record the actual arguments passed to a mock during a test. You can then inspect those values, use them in answers, or assert against them after the call.
+
+## Capturing a single value with `slot`
+
+Create a `CapturingSlot<T>` using the `slot<T>()` factory function and pass it to `capture()` inside `every { }`.
+
+```kotlin
+val speedSlot = slot<Double>()
+
+every {
+    car.recordTelemetry(
+        speed = capture(speedSlot),
+        direction = Direction.NORTH,
+        roadType = any(),
+    )
+} answers {
+    println("Speed: ${speedSlot.captured}")
+    RecordingOutcome.RECORDED
+}
+```
+
+Access the captured value via `slot.captured`.
+
+### Capturing nullable types
+
+Use `captureNullable(slot)` when the parameter type is nullable:
+
+```kotlin
+val roadTypeSlot = slot<RoadType?>()
+
+every {
+    car.recordTelemetry(
+        speed = any(),
+        direction = any(),
+        roadType = captureNullable(roadTypeSlot),
+    )
+} answers {
+    println("Road type: ${roadTypeSlot.captured}") // may be null
+    RecordingOutcome.RECORDED
+}
+```
+
+## Capturing multiple values with a list
+
+Pass a `MutableList` to `capture()` to record every value across multiple calls.
+
+```kotlin
+val list = mutableListOf<Double>()
+
+every {
+    car.recordTelemetry(
+        speed = capture(list),
+        direction = Direction.SOUTH,
+        roadType = any(),
+    )
+} answers {
+    println("Speeds so far: $list")
+    RecordingOutcome.RECORDED
+}
+```
+
+Access individual values with `list[n]`.
+
+## Full example
+
+The following example combines slot capturing and list capturing with `answers { }` blocks:
+
+```kotlin
+enum class Direction { NORTH, SOUTH }
+enum class RecordingOutcome { RECORDED }
+enum class RoadType { HIGHWAY }
+class Car {
+    fun recordTelemetry(speed: Double, direction: Direction, roadType: RoadType?): RecordingOutcome {
+        TODO("not implement for showcase")
+    }
+}
+
+val car = mockk<Car>()
+// allow to capture parameter with non nullable type `Double`
+val speedSlot = slot<Double>()
+// allow to capture parameter with nullable type `RoadType`
+val roadTypeSlot = slot<RoadType?>()
+val list = mutableListOf<Double>()
+
+every {
+    car.recordTelemetry(
+        speed = capture(speedSlot), // makes mock match calls with any value for `speed` and record it in a slot
+        direction = Direction.NORTH, // makes mock and capturing only match calls with specific `direction`. Use `any()` to match calls with any `direction`
+        roadType = captureNullable(roadTypeSlot), // makes mock match calls with any value for `roadType` and record it in a slot
+    )
+} answers {
+    println("Speed: ${speedSlot.captured}, roadType: ${roadTypeSlot.captured}")
+
+    RecordingOutcome.RECORDED
+}
+
+every {
+    car.recordTelemetry(
+        speed = capture(list),
+        direction = Direction.SOUTH,
+        roadType = captureNullable(roadTypeSlot),
+    )
+} answers {
+    println("Speed: ${list}, roadType: ${roadTypeSlot.captured}")
+
+    RecordingOutcome.RECORDED
+}
+
+car.recordTelemetry(speed = 15.0, direction = Direction.NORTH, null) // prints Speed: 15.0, roadType: null
+car.recordTelemetry(speed = 16.0, direction = Direction.SOUTH, RoadType.HIGHWAY) // prints Speed: [16.0], roadType: HIGHWAY
+
+verifyOrder {
+    car.recordTelemetry(speed = or(15.0, 16.0), direction = any(), roadType = null)
+    car.recordTelemetry(speed = 16.0, direction = any(), roadType = RoadType.HIGHWAY)
+}
+
+confirmVerified(car)
+```
+
+<Note>
+Captured values are available immediately after the mocked call returns. You can assert against `slot.captured` or `list[n]` after your code under test has run — you do not need to do it inside the `answers { }` block.
+</Note>
+
+## Capturing lambdas and coroutines
+
+MockK provides two matchers for capturing higher-order function arguments:
+
+| Matcher | Description |
+|---|---|
+| `captureLambda()` | Captures a lambda argument. Invoke it later with `lambda<...>().invoke(...)` inside an `answers` scope. |
+| `captureCoroutine()` | Captures a suspending lambda. Invoke it with `coroutine<...>().coInvoke(...)`. |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Coroutines" icon="bolt" href="/advanced/coroutines">
+    Mock and verify suspend functions with co-prefixed DSL functions.
+  </Card>
+  <Card title="Argument matchers" icon="filter" href="/mocking/argument-matchers">
+    Use matchers to control which calls are intercepted and verified.
+  </Card>
+</CardGroup>

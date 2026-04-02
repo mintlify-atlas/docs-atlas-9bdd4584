@@ -1,0 +1,119 @@
+---
+title: "Android support"
+description: "MockK works in both Android unit tests (run on the JVM) and instrumented tests (run on a device or emulator)."
+---
+
+## Two test modes
+
+Android projects have two distinct test environments, and MockK supports both.
+
+**Unit tests** run on the JVM during your local build, the same as any standard Kotlin project. You use the regular `mockk` artifact and get the full feature set.
+
+**Instrumented tests** run on an Android device or emulator. MockK uses the [dexmaker](https://github.com/linkedin/dexmaker) library to generate mock classes on Dalvik/ART. The features available depend on the Android version running the tests.
+
+- **Before Android P** — only subclassing is available, so mocking final classes, object mocks, static mocks, and constructor mocks are not supported without additional tooling.
+- **Android P and later** — inline instrumentation is available, enabling full feature parity with JVM unit tests.
+
+## Feature support
+
+| Feature | Unit tests | Instrumented (< Android P) | Instrumented (≥ Android P) |
+|---|---|---|---|
+| Annotations (`@MockK`, `@SpyK`, etc.) | ✓ | ✓ | ✓ |
+| Mocking final classes | ✓ | Can use DexOpener | ✓ |
+| Pure Kotlin mocking DSL | ✓ | ✓ | ✓ |
+| Partial argument matching | ✓ | ✓ | ✓ |
+| Chained calls | ✓ | ✓ | ✓ |
+| Matcher expressions | ✓ | ✓ | ✓ |
+| Mocking coroutines | ✓ | ✓ | ✓ |
+| Capturing lambdas | ✓ | ✓ | ✓ |
+| Object mocks (`mockkObject`) | ✓ | | ✓ |
+| Private function mocking | ✓ | | ✓ |
+| Property backing field access | ✓ | ✓ | ✓ |
+| Extension function mocking (static mocks) | ✓ | | ✓ |
+| Constructor mocking (`mockkConstructor`) | ✓ | | ✓ |
+
+## Installation
+
+Replace `{mockkVersion}` with the [latest version from Maven Central](https://search.maven.org/artifact/io.mockk/mockk-android).
+
+### Unit tests
+
+Add MockK as a `testImplementation` dependency:
+
+<CodeGroup>
+
+```kotlin build.gradle.kts
+dependencies {
+    testImplementation("io.mockk:mockk:{mockkVersion}")
+}
+```
+
+```groovy build.gradle
+dependencies {
+    testImplementation "io.mockk:mockk:{mockkVersion}"
+}
+```
+
+```xml pom.xml
+<dependency>
+    <groupId>io.mockk</groupId>
+    <artifactId>mockk-jvm</artifactId>
+    <version>{mockkVersion}</version>
+    <scope>test</scope>
+</dependency>
+```
+
+</CodeGroup>
+
+### Instrumented tests
+
+For tests that run on a device or emulator, use the `mockk-android` artifact paired with `mockk-agent`:
+
+<CodeGroup>
+
+```kotlin build.gradle.kts
+dependencies {
+    androidTestImplementation("io.mockk:mockk-android:{mockkVersion}")
+    androidTestImplementation("io.mockk:mockk-agent:{mockkVersion}")
+}
+```
+
+```groovy build.gradle
+dependencies {
+    androidTestImplementation "io.mockk:mockk-android:{mockkVersion}"
+    androidTestImplementation "io.mockk:mockk-agent:{mockkVersion}"
+}
+```
+
+</CodeGroup>
+
+<Note>
+Check [Maven Central](https://search.maven.org/artifact/io.mockk/mockk-android) for the latest published version.
+</Note>
+
+## Final class mocking before Android P
+
+Before Android P, the Dalvik runtime does not support inline instrumentation. This means MockK can only create mocks via subclassing, which requires classes to be open.
+
+If you need to mock final classes in instrumented tests on pre-Android P devices, you can use [DexOpener](https://github.com/tmurakami/dexopener). DexOpener reopens classes at the Dex level before the tests run, allowing MockK to subclass them. An [example project](https://github.com/tmurakami/dexopener/tree/master/examples/mockk) is available in the DexOpener repository.
+
+Alternatively, you can apply the Kotlin `all-open` compiler plugin to your test source set to make your own classes open at compile time.
+
+## Inline instrumentation on Android P and later
+
+On Android P (API 28) and later, MockK uses inline instrumentation via dexmaker. This gives instrumented tests the same capabilities as JVM unit tests: final class mocking, object mocks, static mocks, and constructor mocks all work without additional configuration.
+
+<Warning>
+Public CI services that do not provide ARM Android P images cannot run instrumented tests with inline instrumentation. You will need a real device, a local emulator, or a CI service that supports Android P emulation.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Introduction" icon="book-open" href="/introduction">
+    Learn what MockK is and how it compares to Mockito.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Write your first mock on the JVM in five minutes.
+  </Card>
+</CardGroup>

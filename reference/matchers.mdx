@@ -1,0 +1,134 @@
+---
+title: "Argument matchers"
+description: "Complete reference for all MockK argument matchers."
+---
+
+Matchers are used inside `every { }` and `verify { }` blocks to match function arguments. By default, simple arguments are matched using `eq()`.
+
+```kotlin
+// Uses eq() implicitly for Direction.NORTH
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+
+// Mix matchers and plain values
+every { car.recordTelemetry(speed = more(50), direction = Direction.NORTH, lat = any(), long = any()) } returns Outcome.RECORDED
+```
+
+<Note>
+When you mix matchers and plain values in the same call, MockK treats plain values as `eq()` matchers automatically.
+</Note>
+
+## General matchers
+
+| Matcher | Description |
+|---|---|
+| `any<T>()` | Matches any argument of type `T` (type-checked) |
+| `any(Class)` | Matches any argument of the given Class (useful for reflective mocking) |
+| `allAny()` | Uses `any()` instead of `eq()` for all matchers provided as simple arguments |
+| `isNull()` | Checks if the value is null |
+| `isNull(inverse=true)` | Checks if the value is not null |
+| `ofType(type)` | Checks if the value belongs to the type |
+| `match { it.startsWith("x") }` | Matches via the passed predicate |
+| `coMatch { it.startsWith("x") }` | Matches via the passed coroutine predicate |
+| `matchNullable { it?.startsWith("x") }` | Matches a nullable value via the passed predicate |
+| `coMatchNullable { it?.startsWith("x") }` | Matches a nullable value via the passed coroutine predicate |
+
+## Equality matchers
+
+| Matcher | Description |
+|---|---|
+| `eq(value)` | Matches if the value is equal via `deepEquals` |
+| `eq(value, inverse=true)` | Matches if the value is NOT equal via `deepEquals` |
+| `neq(value)` | Matches if the value is not equal via `deepEquals` |
+| `refEq(value)` | Matches if the value is equal via reference comparison |
+| `refEq(value, inverse=true)` | Matches if the value is NOT equal via reference comparison |
+| `nrefEq(value)` | Matches if the value is not equal via reference comparison |
+| `cmpEq(value)` | Matches if the value is equal via `compareTo` |
+
+## Comparison matchers
+
+| Matcher | Description |
+|---|---|
+| `less(value)` | Matches if the value is less than the provided value via `compareTo` |
+| `more(value)` | Matches if the value is more than the provided value via `compareTo` |
+| `less(value, andEquals=true)` | Matches if the value is less than or equal to |
+| `more(value, andEquals=true)` | Matches if the value is more than or equal to |
+| `range(from, to, fromInclusive=true, toInclusive=true)` | Matches if the value is in range via `compareTo` |
+
+## Logical matchers
+
+| Matcher | Description |
+|---|---|
+| `and(left, right)` | Combines two matchers via logical AND |
+| `or(left, right)` | Combines two matchers via logical OR |
+| `not(matcher)` | Negates the matcher |
+
+## Capturing matchers
+
+| Matcher | Description |
+|---|---|
+| `capture(slot)` | Captures a non-nullable value to a `CapturingSlot` |
+| `captureNullable(slot)` | Captures a nullable value to a `CapturingSlot` |
+| `capture(mutableList)` | Captures a value to a list |
+| `captureNullable(mutableList)` | Captures a value to a list, including nulls |
+| `captureLambda()` | Captures a lambda |
+| `captureCoroutine()` | Captures a coroutine |
+| `invoke(...)` | Calls a matched argument |
+| `coInvoke(...)` | Calls a matched argument for a coroutine |
+
+## Hint matcher
+
+| Matcher | Description |
+|---|---|
+| `hint(cls)` | Hints the next return type when it has been erased (used in chained calls) |
+
+## Vararg matchers
+
+| Matcher | Description |
+|---|---|
+| `anyVararg()` | Matches any elements in a vararg |
+| `varargAny(matcher)` | Matches if any element matches the matcher |
+| `varargAll(matcher)` | Matches if all elements match the matcher |
+| `any...Vararg()` | Primitive-specific variants (e.g., `anyIntVararg()`) |
+| `varargAny...(matcher)` | Primitive-specific: matches if any element matches |
+| `varargAll...(matcher)` | Primitive-specific: matches if all elements match |
+
+**Vararg scope** — inside `varargAny` and `varargAll` lambdas:
+
+| Parameter | Description |
+|---|---|
+| `position` | Position of the argument in the vararg array |
+| `nArgs` | Total count of arguments in the vararg array |
+
+```kotlin
+every { obj.manyMany(5, 6, *varargAll { it == 7 }) } returns 3
+every { obj.manyMany(5, 6, *varargAny { nArgs > 5 }, 7) } returns 5
+```
+
+## Verification-only matchers
+
+These matchers are only available inside `verify { }` blocks:
+
+| Matcher | Description |
+|---|---|
+| `withArg { code }` | Matches any value and runs code to assert on it |
+| `withNullableArg { code }` | Matches any nullable value and runs code to assert on it |
+| `coWithArg { code }` | Matches any value and runs coroutine code |
+| `coWithNullableArg { code }` | Matches any nullable value and runs coroutine code |
+
+```kotlin
+verify {
+    car.recordTelemetry(
+        speed = withArg { assert(it > 0) },
+        direction = any()
+    )
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Capturing" icon="hand" href="/advanced/capturing">
+    In-depth guide to capturing argument values.
+  </Card>
+  <Card title="Answers" icon="reply" href="/reference/answers">
+    What to return when a stubbed call is matched.
+  </Card>
+</CardGroup>

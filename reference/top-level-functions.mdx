@@ -1,0 +1,113 @@
+---
+title: "Top-level functions"
+description: "Complete reference for all MockK top-level DSL functions."
+---
+
+Import everything you need from a single package:
+
+```kotlin
+import io.mockk.*
+```
+
+## Mock creation
+
+| Function | Description |
+|---|---|
+| `mockk<T>(...)` | Builds a regular mock |
+| `spyk<T>()` | Builds a spy using the default constructor |
+| `spyk(obj)` | Builds a spy by copying from `obj` |
+| `mockkClass(cls)` | Builds a regular mock by passing the class as a parameter |
+| `slot<T>()` | Creates a capturing slot |
+| `registerInstanceFactory` | Allows you to redefine the way of instantiation for certain objects |
+
+## Stubbing
+
+| Function | Description |
+|---|---|
+| `every { }` | Starts a stubbing block |
+| `coEvery { }` | Starts a stubbing block for coroutines |
+| `justRun { }` | Stubs a Unit-returning function to do nothing |
+| `excludeRecords { }` | Excludes some calls from being recorded |
+
+## Verification
+
+| Function | Description |
+|---|---|
+| `verify { }` | Starts a verification block |
+| `coVerify { }` | Starts a verification block for coroutines |
+| `verifyAll { }` | Starts a verification block that should include all calls |
+| `coVerifyAll { }` | Starts a verification block that should include all calls (coroutines) |
+| `verifyOrder { }` | Starts a verification block that checks the order |
+| `coVerifyOrder { }` | Starts a verification block that checks the order (coroutines) |
+| `verifySequence { }` | Starts a verification block that checks whether all calls were made in a specified sequence |
+| `coVerifySequence { }` | Starts a verification block that checks whether all calls were made in a specified sequence (coroutines) |
+| `verifyCount { }` | Verifies call counts using `n * { }` or `(min..max) * { }` syntax |
+| `confirmVerified(...)` | Confirms that all recorded calls were verified |
+| `checkUnnecessaryStub(...)` | Confirms that all stubbed calls are used at least once |
+
+## Clearing and cleanup
+
+| Function | Description |
+|---|---|
+| `clearMocks(...)` | Clears specified mocks (removes recorded calls and stubbing) |
+| `clearAllMocks()` | Clears regular, object, static, and constructor mocks |
+| `clearAllStubsFromMemory()` | Removes all mocks from the internal collection, freeing memory |
+| `unmockkAll()` | Unmocks object, static, and constructor mocks |
+
+## Object mocks
+
+| Function | Description |
+|---|---|
+| `mockkObject(...)` | Turns an object into an object mock, or clears it if already transformed |
+| `unmockkObject(...)` | Turns an object mock back into a regular object |
+
+## Static mocks
+
+| Function | Description |
+|---|---|
+| `mockkStatic(...)` | Makes a static mock out of a class, or clears it if already transformed |
+| `unmockkStatic(...)` | Turns a static mock back into a regular class |
+| `clearStaticMockk(...)` | Clears a static mock |
+
+## Constructor mocks
+
+| Function | Description |
+|---|---|
+| `mockkConstructor(cls)` | Makes a constructor mock out of a class, or clears it if already transformed |
+| `unmockkConstructor(cls)` | Turns a constructor mock back into a regular class |
+| `clearConstructorMockk(cls)` | Clears the constructor mock |
+
+## Examples
+
+```kotlin
+// Mock creation
+val car = mockk<Car>()
+val car2 = spyk(Car())
+
+// Stubbing
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+justRun { car.stop() }
+
+// Verification
+verify { car.drive(Direction.NORTH) }
+confirmVerified(car)
+
+// Cleanup
+clearMocks(car)
+unmockkAll()
+```
+
+<CardGroup cols={2}>
+  <Card title="Matchers" icon="filter" href="/reference/matchers">
+    All argument matchers for use in stubbing and verification blocks.
+  </Card>
+  <Card title="Answers" icon="reply" href="/reference/answers">
+    All answer types for defining stubbed behavior.
+  </Card>
+  <Card title="Verification modes" icon="circle-check" href="/reference/verification-modes">
+    Verification parameters and ordering modes.
+  </Card>
+  <Card title="Core concepts" icon="book" href="/mocking/mocks-and-spies">
+    Learn how mocks, spies, and stubs work.
+  </Card>
+</CardGroup>

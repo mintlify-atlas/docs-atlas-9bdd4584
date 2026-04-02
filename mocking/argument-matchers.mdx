@@ -1,0 +1,260 @@
+---
+title: "Argument matchers"
+description: "Match method arguments in MockK stubs and verifications using built-in and custom matchers."
+keywords: ["mockk", "matchers", "any", "eq", "capture", "vararg", "custom matcher", "MockKMatcherScope"]
+---
+
+Matchers tell MockK which calls a stub or verification should apply to. By default, plain argument values are wrapped in `eq()` (deep equality). You can replace any argument with a matcher for more flexible matching.
+
+## How matchers work
+
+When you write:
+
+```kotlin
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+```
+
+MockK implicitly wraps `Direction.NORTH` with `eq(Direction.NORTH)`. You can mix plain values and explicit matchers freely:
+
+```kotlin
+val car = mockk<Car>()
+
+every {
+    car.recordTelemetry(
+        speed = more(50),
+        direction = Direction.NORTH, // eq() applied automatically
+        lat = any(),
+        long = any()
+    )
+} returns Outcome.RECORDED
+
+car.recordTelemetry(60, Direction.NORTH, 51.1377382, 17.0257142)
+
+verify { car.recordTelemetry(60, Direction.NORTH, 51.1377382, 17.0257142) }
+
+confirmVerified(car)
+```
+
+## Matchers reference
+
+| Matcher | Description |
+|---|---|
+| `any<T>()` | Matches any argument of type `T` (type-checked). |
+| `any(Class)` | Matches any argument of the given class. |
+| `allAny()` | Applies `any()` to all arguments instead of `eq()`. |
+| `isNull()` | Matches `null`. |
+| `isNull(inverse=true)` | Matches any non-null value. |
+| `ofType(type)` | Matches if the value belongs to the given type. |
+| `match { it.startsWith("string") }` | Matches via a predicate. |
+| `coMatch { it.startsWith("string") }` | Matches via a coroutine predicate. |
+| `matchNullable { it?.startsWith("string") }` | Matches a nullable value via a predicate. |
+| `coMatchNullable { it?.startsWith("string") }` | Matches a nullable value via a coroutine predicate. |
+| `eq(value)` | Deep equality match. |
+| `eq(value, inverse=true)` | Deep inequality match. |
+| `neq(value)` | Alias for `eq(value, inverse=true)`. |
+| `refEq(value)` | Reference equality match. |
+| `refEq(value, inverse=true)` | Reference inequality match. |
+| `nrefEq(value)` | Alias for `refEq(value, inverse=true)`. |
+| `cmpEq(value)` | Matches using `compareTo`. |
+| `less(value)` | Matches values less than `value` via `compareTo`. |
+| `more(value)` | Matches values greater than `value` via `compareTo`. |
+| `less(value, andEquals=true)` | Matches values less than or equal to `value`. |
+| `more(value, andEquals=true)` | Matches values greater than or equal to `value`. |
+| `range(from, to, fromInclusive=true, toInclusive=true)` | Matches values within a range. |
+| `and(left, right)` | Combines two matchers with a logical AND. |
+| `or(left, right)` | Combines two matchers with a logical OR. |
+| `not(matcher)` | Negates a matcher. |
+| `capture(slot)` | Captures a non-nullable value into a `CapturingSlot`. |
+| `captureNullable(slot)` | Captures a nullable value into a `CapturingSlot`. |
+| `capture(mutableList)` | Captures a value into a list. |
+| `captureNullable(mutableList)` | Captures a nullable value into a list. |
+| `captureLambda()` | Captures a lambda argument. |
+| `captureCoroutine()` | Captures a coroutine argument. |
+| `invoke(...)` | Calls a matched argument (lambda). |
+| `coInvoke(...)` | Calls a matched argument (coroutine). |
+| `hint(cls)` | Hints the next return type when it has been erased. |
+
+## Vararg matchers
+
+MockK provides dedicated matchers for `vararg` parameters (available since version 1.9.1).
+
+```kotlin
+interface ClsWithManyMany {
+    fun manyMany(vararg x: Any): Int
+}
+
+val obj = mockk<ClsWithManyMany>()
+
+every { obj.manyMany(5, 6, *varargAll { it == 7 }) } returns 3
+
+println(obj.manyMany(5, 6, 7))       // 3
+println(obj.manyMany(5, 6, 7, 7))    // 3
+println(obj.manyMany(5, 6, 7, 7, 7)) // 3
+
+every { obj.manyMany(5, 6, *anyVararg(), 7) } returns 4
+
+println(obj.manyMany(5, 6, 1, 7))       // 4
+println(obj.manyMany(5, 6, 2, 3, 7))    // 4
+println(obj.manyMany(5, 6, 4, 5, 6, 7)) // 4
+
+every { obj.manyMany(5, 6, *varargAny { nArgs > 5 }, 7) } returns 5
+
+println(obj.manyMany(5, 6, 4, 5, 6, 7))    // 5
+println(obj.manyMany(5, 6, 4, 5, 6, 7, 7)) // 5
+
+every {
+    obj.manyMany(5, 6, *varargAny {
+        if (position < 3) it == 3 else it == 4
+    }, 7)
+} returns 6
+
+println(obj.manyMany(5, 6, 3, 4, 7))    // 6
+println(obj.manyMany(5, 6, 3, 4, 4, 7)) // 6
+```
+
+| Vararg matcher | Description |
+|---|---|
+| `anyVararg()` | Matches any elements in a vararg. |
+| `varargAll { predicate }` | Matches if all vararg elements satisfy the predicate. |
+| `varargAny { predicate }` | Matches if at least one vararg element satisfies the predicate. |
+| `any...Vararg()` | Primitive-type specific version of `anyVararg()`. |
+| `varargAll...(matcher)` | Primitive-type specific version of `varargAll`. |
+| `varargAny...(matcher)` | Primitive-type specific version of `varargAny`. |
+
+Inside a vararg predicate block, `position` gives the element's index in the array and `nArgs` gives the total count.
+
+## Custom matchers
+
+### Simple matchers via `MockKMatcherScope`
+
+The simplest way to write a custom matcher is to extend `MockKMatcherScope` (or `MockKVerificationScope`) with a function that delegates to `match { }`:
+
+```kotlin
+fun MockKMatcherScope.seqEq(seq: Sequence<String>) = match<Sequence<String>> {
+    it.toList() == seq.toList()
+}
+```
+
+You can then use it in any `every` or `verify` block just like a built-in matcher.
+
+### Advanced matchers via the `Matcher<T>` interface
+
+For more control, implement the `Matcher<T>` interface. The following example matches a `List<Int>` regardless of element order:
+
+```kotlin
+data class ListWithoutOrderMatcher<T>(
+    val expectedList: List<T>,
+    val refEq: Boolean
+) : Matcher<List<T>> {
+    val map = buildCountsMap(expectedList, refEq)
+
+    override fun match(arg: List<T>?): Boolean {
+        if (arg == null) return false
+        return buildCountsMap(arg, refEq) == map
+    }
+
+    private fun buildCountsMap(list: List<T>, ref: Boolean): Map<Any?, Int> {
+        val map = mutableMapOf<Any?, Int>()
+        for (item in list) {
+            val key = when {
+                item == null -> nullKey
+                refEq -> InternalPlatform.ref(item)
+                else -> item
+            }
+            map.compute(key, { _, value -> (value ?: 0) + 1 })
+        }
+        return map
+    }
+
+    override fun toString() = "matchListWithoutOrder($expectedList)"
+
+    @Suppress("UNCHECKED_CAST")
+    override fun substitute(map: Map<Any, Any>): Matcher<List<T>> {
+        return copy(expectedList = expectedList.map { map.getOrDefault(it as Any?, it) } as List<T>)
+    }
+
+    companion object {
+        val nullKey = Any()
+    }
+}
+
+inline fun <reified T : List<E>, E : Any> MockKMatcherScope.matchListWithoutOrder(
+    vararg items: E,
+    refEq: Boolean = true
+): T = match(ListWithoutOrderMatcher(listOf(*items), refEq))
+```
+
+Use it in a test:
+
+```kotlin
+@Test
+fun test() {
+    class MockCls {
+        fun op(a: List<Int>) = a.reversed()
+    }
+
+    val mock = mockk<MockCls>()
+
+    every { mock.op(any()) } returns listOf(5, 6, 9)
+
+    println(mock.op(listOf(1, 2, 3)))
+
+    verify { mock.op(matchListWithoutOrder(3, 2, 1)) }
+}
+```
+
+### Reflection matchers
+
+You can use Kotlin reflection to build matchers dynamically. The following example stubs all builder-style methods on a mock by reflecting on the class:
+
+```kotlin
+val builderFunctions = MyBuilder::class.memberFunctions.filter {
+    it.returnType.classifier == MyBuilder::class
+}
+val builderMock = mockk<MyBuilder> {
+    builderFunctions.forEach { func ->
+        every {
+            val params = listOf<Any?>(builderMock) +
+                func.parameters.drop(1).map { any(it.type.classifier as KClass<Any>) }
+            func.call(*params.toTypedArray())
+        } answers {
+            this@mockk
+        }
+    }
+}
+```
+
+## Verification-only matchers
+
+These matchers are available only inside `verify { }` blocks. They match any value and also let you run assertions or capture the argument inline.
+
+| Matcher | Description |
+|---|---|
+| `withArg { code }` | Matches any value and executes `code` against it. |
+| `withNullableArg { code }` | Matches any nullable value and executes `code`. |
+| `coWithArg { code }` | Matches any value and executes coroutine `code`. |
+| `coWithNullableArg { code }` | Matches any nullable value and executes coroutine `code`. |
+
+Example:
+
+```kotlin
+verify {
+    car.recordTelemetry(
+        speed = withArg { assert(it > 50) },
+        direction = any(),
+        lat = any(),
+        long = any()
+    )
+}
+```
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Stubbing" icon="code" href="/mocking/stubbing">
+    Use matchers inside `every { }` to control return values.
+  </Card>
+  <Card title="Verification" icon="circle-check" href="/mocking/verification">
+    Use matchers inside `verify { }` to assert call interactions.
+  </Card>
+</CardGroup>

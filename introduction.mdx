@@ -1,0 +1,62 @@
+---
+title: "Introduction"
+description: "MockK is a mocking library built specifically for Kotlin. It gives you a clean DSL for creating mocks, stubs, and spies that work naturally with Kotlin's type system."
+---
+
+## What is MockK?
+
+MockK is a Kotlin-first mocking library for the JVM and Android. It was created to address the friction that arises when using Java-based mocking tools — most notably Mockito — in Kotlin codebases.
+
+Kotlin classes are `final` by default. Mockito uses subclassing to create mocks, which means it cannot mock a `final` class without extra configuration. MockK uses bytecode instrumentation instead, so it mocks `final` classes out of the box without any plugins or workarounds.
+
+Beyond final classes, MockK is designed around Kotlin idioms: its DSL uses lambda receivers, infix functions, and inline reified types to produce test code that reads naturally in Kotlin.
+
+## Key capabilities
+
+**Final class mocking** — MockK mocks any class, `final` or open, without requiring the `all-open` compiler plugin or the `mockito-inline` extension.
+
+**Coroutine support** — Every stubbing and verification function has a `co`-prefixed variant (`coEvery`, `coVerify`, etc.) for suspending functions, so you can test coroutine-based code without writing adapter wrappers.
+
+**Kotlin DSL** — Stubs and verifications are expressed as lambda blocks. The API uses reified generics (`mockk<Car>()`) so you never need to pass `Car::class.java` as an argument.
+
+**Object and static mocking** — Kotlin `object` declarations and top-level functions (compiled to static methods on the JVM) can both be mocked with `mockkObject` and `mockkStatic`.
+
+**Constructor mocking** — `mockkConstructor` intercepts `new` calls so you can control what a newly constructed object does without changing production code.
+
+**Android support** — MockK works in Android unit tests and instrumented tests. On Android P and later, it uses inline instrumentation for full feature parity with the JVM. See [Android support](/android) for details.
+
+## Why not Mockito for Kotlin?
+
+Mockito works in Kotlin, but it was designed for Java. The friction shows up in several areas:
+
+- **Final classes** require adding `mockito-inline` or creating a `MockitoExtensions` file, whereas MockK handles them by default.
+- **Argument matchers** in Mockito return `null` at the type level, which forces null-check workarounds (`anyObject()` vs `any()`). MockK matchers return typed values and work inline without nullability hacks.
+- **Suspending functions** are not supported by Mockito without third-party libraries. MockK provides first-class coroutine support.
+- **Top-level and extension functions** are static on the JVM. Mockito offers no direct way to mock them. MockK provides `mockkStatic` for this purpose.
+
+If you are starting a new Kotlin project or migrating an existing one, MockK removes the class of workarounds that come with adapting a Java mocking tool to Kotlin.
+
+## Known limitations
+
+<Warning>
+**Inline functions cannot be mocked.** Kotlin inlines the function body at call sites at compile time, so there is no method to intercept at runtime. See [issue #27](https://github.com/mockk/mockk/issues/27) for discussion.
+</Warning>
+
+<Warning>
+**Spies on suspending functions produce unexpected results.** When you use `spyk` and stub a `suspend` function, the coroutine machinery can interfere with how MockK records and delegates calls. Avoid spying on suspending functions where possible. See [issue #554](https://github.com/mockk/mockk/issues/554).
+</Warning>
+
+<Warning>
+**JDK 16+ access restrictions.** `mockkStatic` and `spyk` may throw `InaccessibleObjectException` or `IllegalAccessException` on JDK 16 and later due to stronger module encapsulation. If you encounter this, see the [JDK 16 access exceptions guide](https://github.com/mockk/mockk/blob/master/doc/md/jdk16-access-exceptions.md).
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Add MockK to your project and write your first mock in five minutes.
+  </Card>
+  <Card title="Android support" icon="android" href="/android">
+    Set up MockK for Android unit tests and instrumented tests.
+  </Card>
+</CardGroup>

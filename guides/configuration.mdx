@@ -1,0 +1,96 @@
+---
+title: 'Configuration'
+description: 'Adjust MockK behavior globally using a properties file or system properties.'
+keywords: ['mockk', 'configuration', 'mockk.properties', 'settings', 'relaxed', 'stacktraces']
+---
+
+MockK reads a properties file at startup so you can set default behavior across your entire test suite without repeating options on every `mockk<>()` call.
+
+## Create the configuration file
+
+<Steps>
+  <Step title="Create the file">
+    Add a file at `src/test/resources/mockk.properties` in your project.
+  </Step>
+  <Step title="Add your options">
+    Set any of the supported properties. Unset properties use their default values.
+
+    ```properties
+    # src/test/resources/mockk.properties
+    relaxed=false
+    relaxUnitFun=false
+    recordPrivateCalls=false
+    stackTracesOnVerify=true
+    stackTracesAlignment=center
+    failOnSetBackingFieldException=false
+
+    # Restricted mocking
+    mockk.restrictedClasses=com.example.MyClass,com.example.AnotherClass
+    mockk.throwExceptionOnBadMock=false
+    ```
+  </Step>
+</Steps>
+
+## Configuration options
+
+| Property | Description | Default |
+|---|---|---|
+| `relaxed` | Enable relaxed mocking globally. Relaxed mocks return simple default values for all functions. | `false` |
+| `relaxUnitFun` | Enable relaxed mocking for `Unit`-returning functions only. | `false` |
+| `recordPrivateCalls` | Record private function calls so they can be verified with `verify`. | `false` |
+| `stackTracesOnVerify` | Show stack traces in the output when verification fails. | `true` |
+| `stackTracesAlignment` | Align stack traces to `left` or `center`. `left` matches standard JVM stack trace formatting. | `center` |
+| `failOnSetBackingFieldException` | Fail the test if MockK cannot set a backing field. When `false`, a warning is logged instead. | `false` |
+| `mockk.restrictedClasses` | Comma-separated list of fully-qualified class names to restrict from mocking. | — |
+| `mockk.throwExceptionOnBadMock` | When `true`, throw `MockKException` if a restricted class is mocked. When `false`, log a warning and continue. | `false` |
+
+<Note>
+`stackTracesAlignment` controls whether stack traces are centered (the default, which aligns with MockK's output format) or left-aligned (more consistent with standard JVM stack traces).
+</Note>
+
+<Note>
+When `failOnSetBackingFieldException=false`, MockK logs `"Failed to set backing field"` as a warning and continues. Set it to `true` to turn this into a test failure.
+</Note>
+
+## Legacy configuration location
+
+For backward compatibility, MockK also reads:
+
+```
+src/test/resources/io/mockk/settings.properties
+```
+
+When both files exist, `mockk.properties` takes precedence.
+
+<Warning>
+The `io/mockk/settings.properties` path is deprecated and will be removed in a future version. Migrate to `src/test/resources/mockk.properties`.
+</Warning>
+
+## Override with system properties
+
+You can override any property at test execution time using Java system properties. This is useful for CI pipelines or one-off local runs.
+
+In `build.gradle.kts`, pass a property for every test run:
+
+```kotlin
+tasks.withType<Test> {
+    systemProperty("mockk.throwExceptionOnBadMock", "true")
+}
+```
+
+To make the value configurable from the command line, read it from `System.getProperty`:
+
+```kotlin
+tasks.withType<Test> {
+    systemProperty(
+        "mockk.throwExceptionOnBadMock",
+        System.getProperty("mockk.throwExceptionOnBadMock")
+    )
+}
+```
+
+Then pass the value when you invoke Gradle:
+
+```bash
+./gradlew -Dmockk.throwExceptionOnBadMock=true :modules:name:test
+```

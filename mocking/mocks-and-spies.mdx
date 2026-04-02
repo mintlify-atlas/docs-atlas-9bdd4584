@@ -1,0 +1,357 @@
+---
+title: "Mocks and spies"
+description: "Create mocks and spies in MockK to isolate dependencies and test Kotlin code."
+keywords: ["mockk", "mock", "spy", "relaxed mock", "object mock", "annotations"]
+---
+
+A **mock** is a fake object that replaces a real dependency in your tests. MockK generates mocks at runtime and lets you control their behavior with `every { }` and verify interactions with `verify { }`.
+
+A **spy** wraps a real object so you can observe or selectively override its methods while keeping real behavior by default.
+
+## Creating a basic mock
+
+Use `mockk<T>()` to create a mock of any class or interface. By default mocks are strict: every call must be stubbed or MockK throws an exception.
+
+```kotlin
+val car = mockk<Car>()
+
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+
+car.drive(Direction.NORTH) // returns OK
+
+verify { car.drive(Direction.NORTH) }
+
+confirmVerified(car)
+```
+
+## Strict vs relaxed mocks
+
+By default, MockK mocks are **strict**: calling an unstubbed method throws an exception. Relaxed mocks return sensible defaults (zero, empty string, `null`, or chained mocks for reference types) without requiring explicit stubs.
+
+<CardGroup cols={2}>
+  <Card title="Strict mock (default)" icon="shield">
+    Every method call must be stubbed. Calls to unstubbed methods throw immediately.
+  </Card>
+  <Card title="Relaxed mock" icon="circle-check">
+    Unstubbed methods return default values. You only stub the calls you care about.
+  </Card>
+</CardGroup>
+
+```kotlin
+val car = mockk<Car>(relaxed = true)
+
+car.drive(Direction.NORTH) // returns null — no stub needed
+
+verify { car.drive(Direction.NORTH) }
+
+confirmVerified(car)
+```
+
+<Warning>
+Relaxed mocking works poorly with generic return types. MockK usually throws a class cast exception in this case. Stub generic-returning methods manually instead.
+
+```kotlin
+val func = mockk<() -> Car>(relaxed = true)
+
+// Workaround: stub the generic return explicitly
+every { func() } returns Car()
+
+func()
+```
+</Warning>
+
+### Relaxing only `Unit`-returning functions
+
+If you only want to relax functions that return `Unit` (so you don't have to `justRun` every one), use `relaxUnitFun = true`.
+
+<CodeGroup>
+
+```kotlin Function argument
+mockk<ClassBeingMocked>(relaxUnitFun = true)
+```
+
+```kotlin Annotation
+@MockK(relaxUnitFun = true)
+lateinit var mock1: ClassBeingMocked
+init {
+    MockKAnnotations.init(this)
+}
+```
+
+```kotlin MockKAnnotations.init
+@MockK
+lateinit var mock2: ClassBeingMocked
+init {
+    MockKAnnotations.init(this, relaxUnitFun = true)
+}
+```
+
+</CodeGroup>
+
+## Spies
+
+A spy wraps a real object. Real methods are called unless you stub them.
+
+```kotlin
+val car = spyk(Car()) // or spyk<Car>() to call the default constructor
+
+car.drive(Direction.NORTH) // returns whatever the real Car.drive() returns
+
+verify { car.drive(Direction.NORTH) }
+
+confirmVerified(car)
+```
+
+<Note>
+`spyk(obj)` copies the object. Mutations to the original after the spy is created are not reflected in the spy.
+
+There is a known issue with spies and suspending functions: [mockk#554](https://github.com/mockk/mockk/issues/554).
+</Note>
+
+## Partial mocking
+
+You can stub some methods while delegating everything else to the real implementation using `callOriginal()`. This works for both strict and relaxed mocks.
+
+```kotlin
+class Adder {
+    fun addOne(num: Int) = num + 1
+}
+
+val adder = mockk<Adder>()
+
+every { adder.addOne(any()) } returns -1
+every { adder.addOne(3) } answers { callOriginal() }
+
+assertEquals(-1, adder.addOne(2))
+assertEquals(4, adder.addOne(3)) // original function is called
+```
+
+## Object mocks
+
+Kotlin `object` declarations are singletons, so you cannot create a new instance. Use `mockkObject` to apply mock behavior to the existing singleton.
+
+```kotlin
+object ObjBeingMocked {
+    fun add(a: Int, b: Int) = a + b
+}
+
+mockkObject(ObjBeingMocked)
+
+assertEquals(3, ObjBeingMocked.add(1, 2))
+
+every { ObjBeingMocked.add(1, 2) } returns 55
+
+assertEquals(55, ObjBeingMocked.add(1, 2))
+```
+
+Always clean up after an object mock. Use `unmockkObject` (targeted) or `unmockkAll` (everything):
+
+```kotlin
+@Before
+fun beforeTests() {
+    mockkObject(ObjBeingMocked)
+    every { ObjBeingMocked.add(1, 2) } returns 55
+}
+
+@After
+fun afterTests() {
+    unmockkObject(ObjBeingMocked)
+    // or unmockkAll()
+}
+```
+
+You can also use the scoped form, which unmocks automatically after the block:
+
+```kotlin
+mockkObject(ObjBeingMocked) {
+    assertEquals(3, ObjBeingMocked.add(1, 2))
+    every { ObjBeingMocked.add(1, 2) } returns 55
+    assertEquals(55, ObjBeingMocked.add(1, 2))
+}
+// ObjBeingMocked is restored here
+```
+
+## Class mocks
+
+Use `mockkClass` when you need a mock instance and you have the class as a reference at runtime rather than as a type parameter.
+
+```kotlin
+val car = mockkClass(Car::class)
+
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+
+car.drive(Direction.NORTH) // returns OK
+
+verify { car.drive(Direction.NORTH) }
+```
+
+## Hierarchical mocking
+
+From version 1.9.1 you can stub entire object hierarchies inline using the `mockk { every { ... } }` block syntax:
+
+```kotlin
+val addressBook = mockk<AddressBook> {
+    every { contacts } returns listOf(
+        mockk {
+            every { name } returns "John"
+            every { telephone } returns "123-456-789"
+            every { address.city } returns "New-York"
+            every { address.zip } returns "123-45"
+        },
+        mockk {
+            every { name } returns "Alex"
+            every { telephone } returns "789-456-123"
+            every { address } returns mockk {
+                every { city } returns "Wroclaw"
+                every { zip } returns "543-21"
+            }
+        }
+    )
+}
+```
+
+## Multiple interfaces
+
+Use `moreInterfaces` to make a mock (or spy) implement additional interfaces beyond its declared type.
+
+```kotlin
+val spy = spyk(System.out, moreInterfaces = arrayOf(Runnable::class))
+
+spy.println(555)
+
+every {
+    (spy as Runnable).run()
+} answers {
+    (self as PrintStream).println("Run! Run! Run!")
+}
+
+val thread = Thread(spy as Runnable)
+thread.start()
+thread.join()
+```
+
+## Annotations
+
+Annotations eliminate boilerplate for common mock setup patterns.
+
+| Annotation | Description |
+|---|---|
+| `@MockK` | Creates a strict mock. |
+| `@RelaxedMockK` | Creates a relaxed mock (equivalent to `mockk(relaxed = true)`). |
+| `@MockK(relaxUnitFun = true)` | Creates a mock that relaxes only `Unit`-returning functions. |
+| `@SpyK` | Creates a spy over the annotated variable's assigned value. |
+| `@InjectMockKs` | Injects mocks into matching properties of the annotated object by name, then by type. |
+| `@OverrideMockKs` | Same as `@InjectMockKs` but also sets `overrideValues = true` and `injectImmutable = true`. |
+
+```kotlin
+class TrafficSystem {
+    lateinit var car1: Car
+    lateinit var car2: Car
+    lateinit var car3: Car
+}
+
+class CarTest {
+    @MockK
+    lateinit var car1: Car
+
+    @RelaxedMockK
+    lateinit var car2: Car
+
+    @MockK(relaxUnitFun = true)
+    lateinit var car3: Car
+
+    @SpyK
+    var car4 = Car()
+
+    @InjectMockKs
+    var trafficSystem = TrafficSystem()
+
+    @Before
+    fun setUp() = MockKAnnotations.init(this, relaxUnitFun = true)
+
+    @Test
+    fun calculateAddsValues1() {
+        // use car1, car2, car3, car4
+    }
+}
+```
+
+<Note>
+`@InjectMockKs` first matches by property name, then by class or superclass. It only injects into `lateinit var`s or unassigned `var`s by default. Use `@OverrideMockKs` to inject into already-assigned properties and `val`s.
+
+If multiple `@InjectMockKs` properties depend on each other via constructors, enable topological dependency resolution:
+
+```kotlin
+@Before
+fun setUp() = MockKAnnotations.init(this, useDependencyOrder = true)
+```
+</Note>
+
+### JUnit 4
+
+Use `MockKRule` to set up and tear down mocks automatically via the rule mechanism:
+
+```kotlin
+class CarTest {
+    @get:Rule
+    val mockkRule = MockKRule(this)
+
+    @MockK
+    lateinit var car1: Car
+
+    @RelaxedMockK
+    lateinit var car2: Car
+
+    @Test
+    fun something() {
+        every { car1.drive() } just Runs
+        every { car2.changeGear(any()) } returns true
+    }
+}
+```
+
+### JUnit 5
+
+Use `@ExtendWith(MockKExtension::class)` to initialize mocks automatically. You can also inject mocks directly as test function parameters:
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+class CarTest {
+    @MockK
+    lateinit var car1: Car
+
+    @RelaxedMockK
+    lateinit var car2: Car
+
+    @Test
+    fun calculateAddsValues1(@MockK car1: Car, @RelaxedMockK car2: Car) {
+        // car1 and car2 are injected here
+    }
+}
+```
+
+`MockKExtension` calls `unmockkAll` and `clearAllMocks` in `@AfterAll` automatically. Suppress this with `@MockKExtension.KeepMocks` or the `mockk.junit.extension.keepmocks=true` property.
+
+## Clearing vs unmocking
+
+| Operation | What it does |
+|---|---|
+| `clearMocks(mock)` | Deletes recorded calls and stubs — the mock object remains usable. |
+| `clearAllMocks()` | Clears all regular, object, static, and constructor mocks. |
+| `unmockkObject(obj)` | Restores an object mock to its original implementation. |
+| `unmockkAll()` | Unmocks all object, static, and constructor mocks. |
+
+<Tip>
+Use `clearMocks` between tests when you want to reuse the same mock instance but reset its state. Use `unmockkObject` / `unmockkAll` when you need to restore Kotlin objects or static mocks to their real implementations.
+</Tip>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Stubbing" icon="code" href="/mocking/stubbing">
+    Control what your mocks return with `every { }`.
+  </Card>
+  <Card title="Verification" icon="circle-check" href="/mocking/verification">
+    Assert that the right methods were called with `verify { }`.
+  </Card>
+</CardGroup>

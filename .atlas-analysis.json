@@ -1,0 +1,109 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "MockK",
+  "projectDescription": "A powerful and idiomatic mocking library for Kotlin, supporting JVM and Android with a clean DSL for stubbing, verification, and argument matching.",
+  "theme": "palm",
+  "primaryColor": "#fbb219",
+  "lightColor": "#079d61",
+  "darkColor": "#de3e8d",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "android"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "mocking/mocks-and-spies",
+              "mocking/stubbing",
+              "mocking/verification",
+              "mocking/argument-matchers"
+            ]
+          },
+          {
+            "group": "Advanced Mocking",
+            "pages": [
+              "advanced/coroutines",
+              "advanced/static-and-object-mocks",
+              "advanced/constructor-mocks",
+              "advanced/extension-functions",
+              "advanced/capturing"
+            ]
+          },
+          {
+            "group": "Configuration & Best Practices",
+            "pages": [
+              "guides/configuration",
+              "guides/restricted-mocking",
+              "guides/bdd-style",
+              "guides/junit-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "DSL Reference",
+            "pages": [
+              "reference/top-level-functions",
+              "reference/matchers",
+              "reference/answers",
+              "reference/verification-modes"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Pure Kotlin DSL for intuitive stubbing and verification",
+    "Mocking of final classes, objects, static methods, and constructors",
+    "Coroutine support with co-prefixed DSL functions (coEvery, coVerify)",
+    "Android support for both unit tests and instrumented tests",
+    "Argument matchers and capturing with CapturingSlot",
+    "Spy support to mix real and mocked behavior",
+    "BDD-style aliases (given/then)",
+    "JUnit 4 and JUnit 5 integration via rules and extensions",
+    "Hierarchical and chained mock configuration",
+    "Restricted mocking to enforce good testing practices"
+  ],
+  "publicApiSurface": [
+    "mockk<T>()",
+    "spyk<T>()",
+    "every { }",
+    "coEvery { }",
+    "verify { }",
+    "coVerify { }",
+    "verifyAll { }",
+    "verifyOrder { }",
+    "verifySequence { }",
+    "confirmVerified()",
+    "checkUnnecessaryStub()",
+    "mockkObject()",
+    "mockkStatic()",
+    "mockkConstructor()",
+    "unmockkAll()",
+    "clearAllMocks()",
+    "slot<T>()",
+    "capture(slot)",
+    "justRun { }",
+    "excludeRecords { }",
+    "@MockK",
+    "@SpyK",
+    "@RelaxedMockK",
+    "@InjectMockKs",
+    "MockKAnnotations.init()",
+    "MockKRule",
+    "MockKExtension"
+  ]
+}

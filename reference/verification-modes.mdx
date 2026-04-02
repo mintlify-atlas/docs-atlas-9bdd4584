@@ -1,0 +1,151 @@
+---
+title: "Verification modes"
+description: "Complete reference for MockK verification functions and parameters."
+---
+
+MockK provides several verification modes to check that mocked functions were called as expected.
+
+## Basic verification
+
+```kotlin
+verify { car.drive(Direction.NORTH) }
+```
+
+## Verification parameters
+
+| Parameter | Description |
+|---|---|
+| `exactly = n` | The function was called exactly `n` times |
+| `atLeast = n` | The function was called at least `n` times |
+| `atMost = n` | The function was called at most `n` times |
+| `inverse = true` | The function was NOT called with the given arguments |
+| `timeout = ms` | Wait up to `ms` milliseconds for the condition to be met (for async code) |
+
+```kotlin
+verify(exactly = 1) { car.drive(Direction.NORTH) }
+verify(atLeast = 3) { car.accelerate(allAny()) }
+verify(atMost = 2) { car.accelerate(fromSpeed = 10, toSpeed = or(20, 30)) }
+verify(exactly = 0) { car.drive(Direction.SOUTH) } // assert not called
+verify(inverse = true) { car.brake() }             // same as exactly = 0
+```
+
+## Ordered verification
+
+| Function | Description |
+|---|---|
+| `verify { }` | Unordered — verifies calls happened, any order |
+| `verifyAll { }` | Unordered — verifies only these calls happened (exhaustive) |
+| `verifyOrder { }` | Verifies calls happened in this relative order (subset OK) |
+| `verifySequence { }` | Verifies exactly this sequence of calls and nothing else |
+
+```kotlin
+// verifyOrder — calls must happen in order, but other calls can be interleaved
+verifyOrder {
+    obj.sum(1, 2)
+    obj.sum(2, 2)
+}
+
+// verifySequence — every call must be listed, in exact order
+verifySequence {
+    obj.sum(1, 2)
+    obj.sum(1, 3)
+    obj.sum(2, 2)
+}
+
+// verifyAll — all listed calls must have happened, any order, no others
+verifyAll {
+    obj.sum(1, 3)
+    obj.sum(1, 2)
+    obj.sum(2, 2)
+}
+```
+
+## wasNot Called
+
+Verify that a mock was never called at all:
+
+```kotlin
+val obj2 = mockk<MockedClass>()
+val obj3 = mockk<MockedClass>()
+
+verify { obj2 wasNot Called }
+verify { listOf(obj2, obj3) wasNot Called }
+```
+
+## verifyCount
+
+Use `verifyCount` for count-based assertions with compact syntax:
+
+```kotlin
+verifyCount {
+    (3..5) * { car.accelerate(allAny(), allAny()) }  // between 3 and 5 times
+    1 * { car.accelerate(fromSpeed = 10, toSpeed = 20) }  // exactly once
+    0 * { car.accelerate(fromSpeed = 30, toSpeed = 10) }  // never
+}
+```
+
+## Timeout (async verification)
+
+For concurrent code, use `timeout` to wait until the condition is met or the timeout expires:
+
+```kotlin
+mockk<MockCls> {
+    every { sum(1, 2) } returns 4
+
+    Thread {
+        Thread.sleep(2000)
+        sum(1, 2)
+    }.start()
+
+    verify(timeout = 3000) { sum(1, 2) }
+}
+```
+
+## confirmVerified
+
+After verifying, call `confirmVerified` to ensure every recorded call was covered by a verify block:
+
+```kotlin
+verify { car.drive(Direction.NORTH) }
+confirmVerified(car)  // fails if car had any other unverified calls
+```
+
+Pass `clear = true` to also clear all recorded calls and verification marks:
+
+```kotlin
+confirmVerified(car, clear = true)
+```
+
+<Note>
+`confirmVerified` is not needed after `verifySequence` or `verifyAll`, since those are already exhaustive.
+</Note>
+
+## excludeRecords
+
+Exclude calls you don't want to verify from `confirmVerified`:
+
+```kotlin
+excludeRecords { car.drive(Direction.SOUTH) }
+
+verify { car.drive(Direction.NORTH) }
+confirmVerified(car)  // Direction.SOUTH call is ignored
+```
+
+## checkUnnecessaryStub
+
+Ensure all stubbed calls are actually used:
+
+```kotlin
+checkUnnecessaryStub(mock1, mock2)
+```
+
+Throws if any stubbed call was never invoked during the test.
+
+<CardGroup cols={2}>
+  <Card title="Verification guide" icon="circle-check" href="/mocking/verification">
+    In-depth guide to verification patterns and best practices.
+  </Card>
+  <Card title="Top-level functions" icon="code" href="/reference/top-level-functions">
+    Full list of all MockK DSL functions.
+  </Card>
+</CardGroup>

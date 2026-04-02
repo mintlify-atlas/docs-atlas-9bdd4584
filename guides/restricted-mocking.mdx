@@ -1,0 +1,186 @@
+---
+title: 'Restricted mocking'
+description: 'Understand which classes MockK restricts by default and how to configure restriction behavior.'
+keywords: ['mockk', 'restricted mocking', 'MockKException', 'bad mock', 'configuration']
+---
+
+Restricted mocking prevents you from mocking classes that are problematic to mock. Mocking system-level or core data-structure classes often signals poor test design and can produce unreliable results. MockK restricts a set of classes by default and lets you extend that list with your own.
+
+## Why restrict mocking?
+
+| Problem | Impact |
+|---|---|
+| False sense of security | Tests can pass even when the implementation is fragile or incorrect. |
+| Tight coupling | Tests become overly dependent on low-level implementation details. |
+| Hard-to-maintain tests | Changes in unrelated code can break tests, increasing maintenance overhead. |
+| Code smells | Mocking system-level or value-type classes often signals poor architecture. |
+
+## Default restricted classes
+
+The following classes are restricted from mocking by default. All subclasses and implementations are also restricted.
+
+| Class | Description | Includes subtypes? |
+|---|---|---|
+| `java.lang.System` | System APIs such as `System.currentTimeMillis()` and `System.getenv()` | Yes |
+| `java.util.Collection` | Collections including `List`, `Set`, and `Queue` | Yes |
+| `java.util.Map` | Key-value structures such as `HashMap` | Yes |
+| `java.io.File` | File I/O classes (abstract instead) | Yes |
+| `java.nio.file.Path` | Path manipulation classes for file systems | Yes |
+
+For example, `ArrayList` and `HashSet` are restricted because they are subtypes of `Collection`, and `HashMap` is restricted because it is a subtype of `Map`.
+
+## Configure restricted mocking
+
+Add the following properties to `src/test/resources/mockk.properties`:
+
+```properties
+# Comma-separated fully-qualified class names to restrict
+mockk.restrictedClasses=com.foo.Bar,com.foo.Baz
+
+# Throw an exception instead of logging a warning
+mockk.throwExceptionOnBadMock=true
+```
+
+See [Configuration](/guides/configuration) for the full list of properties and how to create the file.
+
+## Behavior when mocking a restricted class
+
+### When `mockk.throwExceptionOnBadMock=false` (default)
+
+The test passes. MockK logs a warning such as:
+
+```
+List should not be mocked! Consider refactoring your test.
+```
+
+```kotlin
+@Test
+fun `when throwExceptionOnBadMock is false should not throw exception for collections`() {
+    val mockList = mockk<List<String>>()
+    every { mockList.size } returns 0
+
+    mockList.size shouldBe 0
+}
+```
+
+### When `mockk.throwExceptionOnBadMock=true`
+
+MockK throws `MockKException`, causing the test to fail immediately:
+
+```
+MockKException: Mocking java.util.HashMap is not allowed!
+```
+
+```kotlin
+@Test
+fun `when throwExceptionOnBadMock is true should throw MockKException for collections`() {
+    assertThrows<MockKException> {
+        mockk<List<String>>()  // throws MockKException
+    }
+}
+```
+
+## Restrict custom classes
+
+You can restrict classes from your own codebase using `mockk.properties`. This enforces testing practices even for application code you own.
+
+Given these classes:
+
+```kotlin
+package com.foo
+
+class Foo {
+    fun doSomething(): String = "print Foo"
+}
+```
+
+```kotlin
+package com.bar
+
+class Bar {
+    fun doSomething(): String = "print Bar"
+}
+
+class Baz : Bar() {
+    fun doSomething(): String = "print Baz"
+}
+```
+
+Add them to `mockk.properties`:
+
+```properties
+mockk.restrictedClasses=com.foo.Foo,com.bar.Bar
+mockk.throwExceptionOnBadMock=true
+```
+
+Any attempt to mock `Foo`, `Bar`, or `Baz` (a subtype of `Bar`) now throws `MockKException`:
+
+```kotlin
+class RestrictedTest {
+    @Test
+    fun `should throw exception when mocking restricted class Foo`() {
+        assertFailsWith<MockKException> {
+            mockk<Foo>()  // throws MockKException
+        }
+    }
+
+    @Test
+    fun `should throw exception when mocking restricted class Bar`() {
+        assertFailsWith<MockKException> {
+            mockk<Bar>()  // throws MockKException
+        }
+    }
+
+    @Test
+    fun `should throw exception when mocking restricted class Baz`() {
+        assertFailsWith<MockKException> {
+            mockk<Baz>()  // throws MockKException — Baz is a subtype of Bar
+        }
+    }
+}
+```
+
+## Override with system properties
+
+Pass the property from `build.gradle.kts` for every test run:
+
+```kotlin
+tasks.withType<Test> {
+    systemProperty("mockk.throwExceptionOnBadMock", "true")
+}
+```
+
+Or read it from the command line:
+
+```kotlin
+tasks.withType<Test> {
+    systemProperty(
+        "mockk.throwExceptionOnBadMock",
+        System.getProperty("mockk.throwExceptionOnBadMock")
+    )
+}
+```
+
+Then invoke Gradle with the flag:
+
+```bash
+./gradlew -Dmockk.throwExceptionOnBadMock=true :modules:name:test
+```
+
+## Override with Gradle properties
+
+Add the property to `gradle.properties`:
+
+```properties
+systemProp.mockk.throwExceptionOnBadMock=true
+```
+
+Or pass it on the command line:
+
+```bash
+./gradlew -Pmockk.throwExceptionOnBadMock=true :modules:name:test
+```
+
+<Warning>
+A value set in `gradle.properties` or `build.gradle.kts` overrides the value in `mockk.properties`. If you set `mockk.throwExceptionOnBadMock=false` in `mockk.properties` but `true` in `gradle.properties`, the Gradle value wins.
+</Warning>

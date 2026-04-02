@@ -1,0 +1,128 @@
+---
+title: "Extension functions"
+description: "Mock Kotlin extension functions at the class, object, and module level with MockK."
+keywords: ["mockk", "extension functions", "mockkStatic", "extension properties", "module-wide", "JvmName"]
+---
+
+Kotlin extension functions exist in three scopes, and MockK provides a different mocking strategy for each.
+
+| Scope | How to mock |
+|---|---|
+| Class-wide | Regular `mockk<Ext>()` |
+| Object-wide | Regular `mockk<Ext>()` |
+| Module-wide | `mockkStatic("pkg.FileKt")` or a function reference |
+
+## Class-wide and object-wide extensions
+
+For extensions declared inside a class or object, create a regular mock of the enclosing type. The extension function is available inside a `with` block.
+
+```kotlin
+data class Obj(val value: Int)
+
+class Ext {
+    fun Obj.extensionFunc() = value + 5
+}
+
+with(mockk<Ext>()) {
+    every {
+        Obj(5).extensionFunc()
+    } returns 11
+
+    assertEquals(11, Obj(5).extensionFunc())
+
+    verify {
+        Obj(5).extensionFunc()
+    }
+}
+```
+
+## Module-wide extensions
+
+Top-level extension functions are compiled into a generated class whose name is derived from the file name. Pass that class name as a string to `mockkStatic`.
+
+For a file named `File.kt` in the `pkg` package, the generated class is `pkg.FileKt`:
+
+```kotlin
+data class Obj(val value: Int)
+
+// declared in File.kt ("pkg" package)
+fun Obj.extensionFunc() = value + 5
+
+mockkStatic("pkg.FileKt")
+
+every {
+    Obj(5).extensionFunc()
+} returns 11
+
+assertEquals(11, Obj(5).extensionFunc())
+
+verify {
+    Obj(5).extensionFunc()
+}
+```
+
+### Using function references
+
+On the JVM you can pass a function reference instead of the class name string:
+
+```kotlin
+mockkStatic(Obj::extensionFunc)
+```
+
+<Note>
+This mocks the entire `pkg.FileKt` class, not just `extensionFunc`. All other top-level functions in the same file are also affected.
+</Note>
+
+### Extension properties
+
+The same syntax works for extension properties:
+
+```kotlin
+val Obj.squareValue get() = value * value
+
+mockkStatic(Obj::squareValue)
+```
+
+## Using `@JvmName`
+
+If the file uses `@JvmName`, pass the JVM name as the class name string.
+
+`KHttp.kt`:
+
+```kotlin
+@file:JvmName("KHttp")
+
+package khttp
+// ... KHttp code
+```
+
+Testing code:
+
+```kotlin
+mockkStatic("khttp.KHttp")
+```
+
+## Unpredictable class names
+
+Some Kotlin standard library extension functions split across multiple internal files, producing class names that are not obvious from the source. For example, `File.endsWith()` lives in:
+
+```kotlin
+mockkStatic("kotlin.io.FilesKt__UtilsKt")
+every { File("abc").endsWith(any<String>()) } returns true
+println(File("abc").endsWith("abc"))
+```
+
+<Tip>
+To find the generated class name, open your file in IntelliJ IDEA and use **Tools → Kotlin → Show Kotlin Bytecode**. Alternatively, inspect the `.class` files inside the relevant JAR archive.
+</Tip>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Capturing arguments" icon="crosshairs" href="/advanced/capturing">
+    Capture arguments from mocked calls for richer assertions.
+  </Card>
+  <Card title="Static and object mocks" icon="cube" href="/advanced/static-and-object-mocks">
+    Mock Kotlin objects, enums, and static top-level functions.
+  </Card>
+</CardGroup>

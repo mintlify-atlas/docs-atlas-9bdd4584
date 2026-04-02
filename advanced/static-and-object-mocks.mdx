@@ -1,0 +1,130 @@
+---
+title: "Static and object mocks"
+description: "Mock Kotlin object declarations, enum constants, and static top-level functions with MockK."
+keywords: ["mockk", "object mock", "static mock", "mockkObject", "mockkStatic", "enum mock"]
+---
+
+Kotlin `object` declarations and top-level functions compile to JVM statics. MockK provides `mockkObject` and `mockkStatic` to intercept them in tests.
+
+## Object mocks
+
+A Kotlin `object` is a singleton — you cannot instantiate it. Use `mockkObject` to replace its behavior for the duration of a test.
+
+```kotlin
+object ObjBeingMocked {
+    fun add(a: Int, b: Int) = a + b
+}
+
+mockkObject(ObjBeingMocked) // applies mocking to the object
+
+assertEquals(3, ObjBeingMocked.add(1, 2))
+
+every { ObjBeingMocked.add(1, 2) } returns 55
+
+assertEquals(55, ObjBeingMocked.add(1, 2))
+```
+
+### Cleanup
+
+Always restore the object after the test. Use `unmockkObject` to target a specific object, or `unmockkAll` to restore all object, static, and constructor mocks at once.
+
+```kotlin
+@Before
+fun beforeTests() {
+    mockkObject(ObjBeingMocked)
+    every { ObjBeingMocked.add(1, 2) } returns 55
+}
+
+@Test
+fun willUseMockBehaviour() {
+    assertEquals(55, ObjBeingMocked.add(1, 2))
+}
+
+@After
+fun afterTests() {
+    unmockkObject(ObjBeingMocked)
+    // or unmockkAll()
+}
+```
+
+### Scoped object mocks
+
+Pass a lambda to `mockkObject` to automatically unmock the object when the block exits.
+
+```kotlin
+mockkObject(ObjBeingMocked) {
+    assertEquals(3, ObjBeingMocked.add(1, 2))
+    every { ObjBeingMocked.add(1, 2) } returns 55
+    assertEquals(55, ObjBeingMocked.add(1, 2))
+}
+// ObjBeingMocked is restored here
+```
+
+### Creating new instances of objects
+
+Despite Kotlin's language restrictions, you can create a new instance of an object type if your test logic requires it:
+
+```kotlin
+val newObjectMock = mockk<ObjBeingMocked>()
+```
+
+## Enum mocks
+
+Enum constants are also Kotlin objects. Mock them with `mockkObject`:
+
+```kotlin
+enum class Enumeration(val goodInt: Int) {
+    CONSTANT(35),
+    OTHER_CONSTANT(45);
+}
+
+mockkObject(Enumeration.CONSTANT)
+every { Enumeration.CONSTANT.goodInt } returns 42
+assertEquals(42, Enumeration.CONSTANT.goodInt)
+```
+
+## Static mocks
+
+Top-level Kotlin functions compile to static methods on a generated Java class. Use `mockkStatic` to intercept them.
+
+```kotlin
+import com.cars.buildCar
+
+val testCar = Car()
+mockkStatic(::buildCar)
+every { buildCar() } returns testCar
+
+assertEquals(testCar, buildCar())
+
+verify { buildCar() }
+confirmVerified(::buildCar)
+```
+
+<Note>
+Mocking a top-level function with `mockkStatic` clears any existing mocks for other functions declared in the same file — equivalent to calling `clearStaticMockk` on the generated enclosing class.
+</Note>
+
+## Clearing vs unmocking
+
+| Function | What it does |
+|---|---|
+| `unmockkObject(obj)` | Restores the object to its original implementation. |
+| `unmockkStatic(cls)` | Restores the static class to its original implementation. |
+| `unmockkAll()` | Unmocks all object, static, and constructor mocks. |
+| `clearStaticMockk(cls)` | Clears recorded calls and stubs without restoring the original class. |
+| `clearMocks(mock)` | Clears recorded calls and stubs on a regular mock. |
+
+<Tip>
+Use `clearStaticMockk` or `clearMocks` between tests when you want to reuse the same mock but reset its recorded state. Use the `unmockk*` functions when you need to fully restore real behavior.
+</Tip>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Constructor mocks" icon="hammer" href="/advanced/constructor-mocks">
+    Mock objects created with `new` inside code you don't control.
+  </Card>
+  <Card title="Extension functions" icon="puzzle-piece" href="/advanced/extension-functions">
+    Mock class-wide, object-wide, and module-wide extension functions.
+  </Card>
+</CardGroup>

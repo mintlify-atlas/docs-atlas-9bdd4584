@@ -1,0 +1,93 @@
+---
+title: 'BDD style'
+description: 'Use Behavior-Driven Development aliases for MockK stubbing and verification blocks.'
+keywords: ['mockk', 'BDD', 'behavior-driven development', 'given', 'then', 'mockk-bdd']
+---
+
+MockK provides a separate `mockk-bdd` artifact that adds BDD-style aliases for the core stubbing and verification functions. The aliases map directly to their standard counterparts — there is no difference in behavior, only in naming.
+
+<Tip>
+BDD-style aliases are most useful when you write tests in a Given/When/Then format and want the stubbing and verification blocks to read naturally alongside your test narrative. If your team does not follow BDD conventions, the standard `every`/`verify` API is equally expressive.
+</Tip>
+
+## Add the dependency
+
+<CodeGroup>
+
+```kotlin build.gradle.kts
+testImplementation("io.mockk:mockk:${mockkVersion}")
+testImplementation("io.mockk:mockk-bdd:${mockkVersion}")
+```
+
+```xml pom.xml
+<dependency>
+    <groupId>io.mockk</groupId>
+    <artifactId>mockk-jvm</artifactId>
+    <version>${mockkVersion}</version>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>io.mockk</groupId>
+    <artifactId>mockk-bdd</artifactId>
+    <version>${mockkVersion}</version>
+    <scope>test</scope>
+</dependency>
+```
+
+</CodeGroup>
+
+For Android, use the Android-specific artifacts:
+
+```kotlin build.gradle.kts
+androidTestImplementation("io.mockk:mockk-android:${mockkVersion}")
+androidTestImplementation("io.mockk:mockk-bdd-android:${mockkVersion}")
+```
+
+## Alias mapping
+
+| Standard MockK | BDD alias |
+|---|---|
+| `every { }` | `given { }` |
+| `coEvery { }` | `coGiven { }` |
+| `verify { }` | `then { }` |
+| `coVerify { }` | `coThen { }` |
+
+## Example
+
+The following test uses BDD-style aliases throughout:
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+class CarBddTest {
+
+    @MockK
+    lateinit var car: Car
+
+    @Test
+    fun `car drives north and returns OK`() {
+        // Given
+        given { car.drive(Direction.NORTH) } returns Outcome.OK
+
+        // When
+        val result = car.drive(Direction.NORTH)
+
+        // Then
+        then { car.drive(Direction.NORTH) }
+        confirmVerified(car)
+    }
+}
+```
+
+The same test written with the standard API is identical in behavior:
+
+```kotlin
+@Test
+fun `car drives north and returns OK`() {
+    every { car.drive(Direction.NORTH) } returns Outcome.OK
+
+    val result = car.drive(Direction.NORTH)
+
+    verify { car.drive(Direction.NORTH) }
+    confirmVerified(car)
+}
+```

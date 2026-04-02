@@ -1,0 +1,101 @@
+---
+title: "Answers"
+description: "Complete reference for all MockK answer types used in stubbing blocks."
+---
+
+Answers define what happens when a stubbed function is called. You set them with `every { } <answer>` or `coEvery { } <answer>`.
+
+```kotlin
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+every { car.stop() } just Runs
+every { car.explode() } throws IllegalStateException("boom")
+```
+
+## Primary answers
+
+| Answer | Description |
+|---|---|
+| `returns value` | Returns the specified value |
+| `returnsMany list` | Returns values from the list in order; repeats the last value |
+| `returnsArgument(n)` | Returns the nth argument of the call |
+| `throws ex` | Throws the specified exception |
+| `throwsMany list` | Throws exceptions from the list in order; repeats the last |
+| `answers { code }` | Answers with a code block scoped to the answer scope |
+| `coAnswers { code }` | Answers with a coroutine code block scoped to the answer scope |
+| `answers answerObj` | Answers with an `Answer` object instance |
+| `answers { nothing }` | Answers with null |
+| `just Runs` | Returns `Unit` (use for Unit-returning functions) |
+| `just Awaits` | Never returns (suspends the coroutine indefinitely) |
+| `propertyType Class` | Specifies the type of the backing field accessor |
+| `nullablePropertyType Class` | Specifies the type of the backing field accessor as nullable |
+
+## Additional answers (chaining)
+
+You can chain additional answers after the first. Each subsequent call returns the next answer; the last answer is repeated.
+
+| Answer | Description |
+|---|---|
+| `andThen value` | Returns the specified value on the next call |
+| `andThenMany list` | Returns values from the list on subsequent calls |
+| `andThenThrows ex` | Throws the specified exception on the next call |
+| `andThenThrowsMany list` | Throws exceptions from the list on subsequent calls |
+| `andThen { code }` | Answers with a code block on the next call |
+| `coAndThen { code }` | Answers with a coroutine code block on the next call |
+| `andThenAnswer answerObj` | Answers with an `Answer` object on the next call |
+| `andThen { nothing }` | Answers null on the next call |
+| `andThenJust Runs` | Returns `Unit` on the next call |
+| `andThenJust Awaits` | Never returns on the next call |
+
+```kotlin
+every { car.fuelLevel() } returns 100 andThen 50 andThen 0
+every { service.call() } returns "first" andThenThrows RuntimeException("down")
+```
+
+## Answer scope
+
+Inside `answers { }` blocks, you have access to these properties:
+
+| Property | Description |
+|---|---|
+| `call` | The call object (invocation + matcher) |
+| `invocation` | Information about the actual function invoked |
+| `matcher` | Information about the matcher used |
+| `self` | Reference to the object the invocation was made on |
+| `method` | Reference to the function invoked |
+| `args` | List of invocation arguments |
+| `nArgs` | Number of invocation arguments |
+| `arg(n)` | The nth argument |
+| `firstArg()` | First argument |
+| `secondArg()` | Second argument |
+| `thirdArg()` | Third argument |
+| `lastArg()` | Last argument |
+| `captured()` | Last element in the captured list |
+| `lambda<...>().invoke()` | Calls the captured lambda |
+| `coroutine<...>().coInvoke()` | Calls the captured coroutine |
+| `nothing` | Null value (use with `answers { nothing }`) |
+| `fieldValue` | Accessor to the property backing field |
+| `fieldValueAny` | Accessor to the backing field with `Any?` type |
+| `value` | The value being set (in property setters) |
+| `valueAny` | The value being set with `Any?` type |
+| `callOriginal` | Calls the original real implementation |
+
+```kotlin
+val slot = slot<Int>()
+
+every {
+    obj.sum(any(), capture(slot))
+} answers {
+    1 + firstArg<Int>() + slot.captured
+}
+
+every { adder.addOne(3) } answers { callOriginal() }
+```
+
+<CardGroup cols={2}>
+  <Card title="Stubbing guide" icon="layer-group" href="/mocking/stubbing">
+    In-depth guide to stubbing with every and coEvery.
+  </Card>
+  <Card title="Matchers" icon="filter" href="/reference/matchers">
+    Argument matchers for use in stubbing blocks.
+  </Card>
+</CardGroup>

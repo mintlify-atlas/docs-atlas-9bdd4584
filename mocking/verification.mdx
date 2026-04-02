@@ -1,0 +1,253 @@
+---
+title: "Verification"
+description: "Assert that mocked methods were called as expected using MockK's verify functions."
+keywords: ["mockk", "verify", "verifyAll", "verifyOrder", "verifySequence", "confirmVerified", "wasNot Called"]
+---
+
+After exercising your code under test, use MockK's verification functions to assert that the right methods were called on your mocks with the right arguments.
+
+## Basic verification
+
+```kotlin
+val car = mockk<Car>()
+
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+
+car.drive(Direction.NORTH)
+
+verify { car.drive(Direction.NORTH) }
+```
+
+`verify { }` confirms that the call occurred at least once, in any order. Use `coVerify` for suspending functions.
+
+## Count checks
+
+Pass `atLeast`, `atMost`, or `exactly` to constrain how many times a call must have occurred.
+
+```kotlin
+val car = mockk<Car>(relaxed = true)
+
+car.accelerate(fromSpeed = 10, toSpeed = 20)
+car.accelerate(fromSpeed = 10, toSpeed = 30)
+car.accelerate(fromSpeed = 20, toSpeed = 30)
+
+verify(atLeast = 3) { car.accelerate(allAny()) }
+verify(atMost  = 2) { car.accelerate(fromSpeed = 10, toSpeed = or(20, 30)) }
+verify(exactly = 1) { car.accelerate(fromSpeed = 10, toSpeed = 20) }
+verify(exactly = 0) { car.accelerate(fromSpeed = 30, toSpeed = 10) } // asserts no call occurred
+```
+
+Use `verify(inverse = true) { ... }` as a shorthand to assert a call was **not** made.
+
+## `verifyCount` with range syntax
+
+`verifyCount` lets you combine multiple count assertions in a single block using the `(range) * { call }` syntax:
+
+```kotlin
+val car = mockk<Car>(relaxed = true)
+
+car.accelerate(fromSpeed = 10, toSpeed = 20)
+car.accelerate(fromSpeed = 10, toSpeed = 30)
+car.accelerate(fromSpeed = 20, toSpeed = 30)
+
+verifyCount {
+    (3..5) * { car.accelerate(allAny(), allAny()) } // atLeast=3, atMost=5
+    1 * { car.accelerate(fromSpeed = 10, toSpeed = 20) }   // exactly=1
+    0 * { car.accelerate(fromSpeed = 30, toSpeed = 10) }   // exactly=0
+}
+
+confirmVerified(car)
+```
+
+## Order and completeness
+
+| Function | What it checks |
+|---|---|
+| `verifyAll { }` | All listed calls occurred; order does not matter. |
+| `verifyOrder { }` | Listed calls occurred in the given order (other calls may appear in between). |
+| `verifySequence { }` | Exactly the listed calls occurred, in exactly that order, with no extras. |
+
+```kotlin
+val obj = mockk<MockedClass>()
+val slot = slot<Int>()
+
+every {
+    obj.sum(any(), capture(slot))
+} answers {
+    1 + firstArg<Int>() + slot.captured
+}
+
+obj.sum(1, 2) // returns 4
+obj.sum(1, 3) // returns 5
+obj.sum(2, 2) // returns 5
+
+verifyAll {
+    obj.sum(1, 3)
+    obj.sum(1, 2)
+    obj.sum(2, 2)
+}
+
+verifySequence {
+    obj.sum(1, 2)
+    obj.sum(1, 3)
+    obj.sum(2, 2)
+}
+
+verifyOrder {
+    obj.sum(1, 2)
+    obj.sum(2, 2)
+}
+```
+
+<Tip>
+Prefer `verifySequence` when you need to assert the complete call history. Prefer `verifyOrder` when you only care that certain calls happened before others, without restricting what else may have been called.
+</Tip>
+
+## `wasNot Called`
+
+Assert that a mock received no calls at all:
+
+```kotlin
+val obj2 = mockk<MockedClass>()
+val obj3 = mockk<MockedClass>()
+
+verify {
+    listOf(obj2, obj3) wasNot Called
+}
+```
+
+You can pass a single mock or a list of mocks.
+
+## Validation timeout for concurrent code
+
+When testing concurrent or asynchronous code, pass `timeout` (in milliseconds) to wait until verification passes or the deadline is reached:
+
+```kotlin
+mockk<MockCls> {
+    every { sum(1, 2) } returns 4
+
+    Thread {
+        Thread.sleep(2000)
+        sum(1, 2)
+    }.start()
+
+    verify(timeout = 3000) { sum(1, 2) }
+}
+```
+
+## `confirmVerified`
+
+`confirmVerified` checks that every recorded call on the specified mocks was covered by at least one `verify` block. It throws if any calls remain unverified.
+
+```kotlin
+val car = mockk<Car>()
+
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+every { car.drive(Direction.SOUTH) } returns Outcome.OK
+
+car.drive(Direction.NORTH)
+car.drive(Direction.SOUTH)
+
+verify {
+    car.drive(Direction.SOUTH)
+    car.drive(Direction.NORTH)
+}
+
+confirmVerified(car)
+```
+
+Since v1.14.6, pass `clear = true` to also clear verification marks and recorded calls after confirmation:
+
+```kotlin
+confirmVerified(car, clear = true)
+```
+
+<Note>
+`confirmVerified` adds little value after `verifySequence` or `verifyAll`, because those functions are already exhaustive.
+</Note>
+
+## `checkUnnecessaryStub`
+
+`checkUnnecessaryStub` throws if any stub was declared but never actually called during the test. This helps you keep your test setup free of dead code.
+
+```kotlin
+checkUnnecessaryStub(mock1, mock2)
+```
+
+## `excludeRecords`
+
+Some calls are implementation noise that you do not want to verify. Exclude them from recording so they are invisible to `confirmVerified`, `verifyAll`, and `verifySequence`:
+
+```kotlin
+val car = mockk<Car>()
+
+every { car.drive(Direction.NORTH) } returns Outcome.OK
+every { car.drive(Direction.SOUTH) } returns Outcome.OK
+
+excludeRecords { car.drive(Direction.SOUTH) }
+
+car.drive(Direction.NORTH)
+car.drive(Direction.SOUTH)
+
+verify {
+    car.drive(Direction.NORTH)
+}
+
+confirmVerified(car) // passes — SOUTH was excluded
+```
+
+## Automatic verification with `MockKExtension`
+
+When using JUnit 5 with `@ExtendWith(MockKExtension::class)`, you can opt in to automatic post-test checks:
+
+| Annotation | Effect |
+|---|---|
+| `@MockKExtension.ConfirmVerification` | Calls `confirmVerified` on all mocks after each test. |
+| `@MockKExtension.CheckUnnecessaryStub` | Calls `checkUnnecessaryStub` on all mocks after each test. |
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+@MockKExtension.ConfirmVerification
+@MockKExtension.CheckUnnecessaryStub
+class CarTest {
+    @MockK
+    lateinit var car: Car
+
+    @Test
+    fun `drive north returns OK`() {
+        every { car.drive(Direction.NORTH) } returns Outcome.OK
+        car.drive(Direction.NORTH)
+        verify { car.drive(Direction.NORTH) }
+    }
+}
+```
+
+<Warning>
+`@MockKExtension.ConfirmVerification` failures may not surface in your IDE when run directly — Gradle is responsible for capturing the exception. Run tests via Gradle to see failures reliably.
+</Warning>
+
+## Validators reference
+
+| Validator | Description |
+|---|---|
+| `verify { mock.call() }` | Unordered: call was made at least once. |
+| `verify(inverse=true) { mock.call() }` | Unordered: call was not made. |
+| `verify(atLeast=n) { mock.call() }` | Call was made at least `n` times. |
+| `verify(atMost=n) { mock.call() }` | Call was made at most `n` times. |
+| `verify(exactly=n) { mock.call() }` | Call was made exactly `n` times. |
+| `verifyAll { mock.call1(); mock.call2() }` | Only these calls were made (unordered). |
+| `verifyOrder { mock.call1(); mock.call2() }` | These calls occurred in this order. |
+| `verifySequence { mock.call1(); mock.call2() }` | Exactly these calls in exactly this sequence. |
+| `verify { mock wasNot Called }` | Mock received no calls. |
+| `verify { listOf(m1, m2) wasNot Called }` | None of the listed mocks received calls. |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Argument matchers" icon="filter" href="/mocking/argument-matchers">
+    Match arguments precisely with eq, any, range, and custom matchers.
+  </Card>
+  <Card title="Mocks and spies" icon="copy" href="/mocking/mocks-and-spies">
+    Review how to create mocks, spies, and object mocks.
+  </Card>
+</CardGroup>

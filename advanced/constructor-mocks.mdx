@@ -1,0 +1,128 @@
+---
+title: "Constructor mocks"
+description: "Intercept object construction in MockK to mock newly created instances inside code you don't own."
+keywords: ["mockk", "constructor mock", "mockkConstructor", "anyConstructed", "constructedWith"]
+---
+
+Constructor mocks let you control the behavior of objects that are created inside the code under test — useful when that code calls `MyClass()` directly and you cannot inject a dependency.
+
+## Basic constructor mocking
+
+<Steps>
+  <Step title="Apply the constructor mock">
+    Call `mockkConstructor(MockCls::class)` before the code under test runs. This intercepts every call to any constructor of `MockCls`.
+
+    ```kotlin
+    mockkConstructor(MockCls::class)
+    ```
+  </Step>
+  <Step title="Stub the prototype mock">
+    Use `anyConstructed<MockCls>()` to reference the *prototype mock* — a single shared mock that all newly constructed instances delegate to.
+
+    ```kotlin
+    every { anyConstructed<MockCls>().add(1, 2) } returns 4
+    ```
+  </Step>
+  <Step title="Run the code and verify">
+    Any `MockCls()` call inside the code under test produces a *constructed mock* that forwards behavior to the prototype.
+
+    ```kotlin
+    assertEquals(4, MockCls().add(1, 2)) // note: a new object is created
+
+    verify { anyConstructed<MockCls>().add(1, 2) }
+    ```
+  </Step>
+</Steps>
+
+Full example:
+
+```kotlin
+class MockCls {
+    fun add(a: Int, b: Int) = a + b
+}
+
+mockkConstructor(MockCls::class)
+
+every { anyConstructed<MockCls>().add(1, 2) } returns 4
+
+assertEquals(4, MockCls().add(1, 2))
+
+verify { anyConstructed<MockCls>().add(1, 2) }
+```
+
+### How prototype mocks work
+
+After any constructor of the mocked class runs, the resulting object becomes a *constructed mock*. Its behavior is connected to the *prototype mock* accessed via `anyConstructed<MockCls>()`. There is one prototype mock per class. Call recording also happens on the prototype mock. If no stub is configured for a function, the original implementation is called.
+
+## Mocking multiple constructors
+
+When a class has more than one constructor, use `constructedWith<T>(matchers...)` to target a specific one.
+
+```kotlin
+class MockCls(private val a: Int = 0) {
+    constructor(x: String) : this(x.toInt())
+    fun add(b: Int) = a + b
+}
+
+mockkConstructor(MockCls::class)
+
+every { constructedWith<MockCls>().add(1) } returns 2
+every {
+    constructedWith<MockCls>(OfTypeMatcher<String>(String::class)).add(2)
+} returns 3
+every {
+    constructedWith<MockCls>(EqMatcher(4)).add(any())
+} returns 4
+
+assertEquals(2, MockCls().add(1))
+assertEquals(3, MockCls("2").add(2))
+assertEquals(4, MockCls(4).add(7))
+
+verify {
+    constructedWith<MockCls>().add(1)
+    constructedWith<MockCls>(OfTypeMatcher<String>(String::class)).add(2)
+    constructedWith<MockCls>(EqMatcher(4)).add(7)
+}
+```
+
+<Warning>
+When you use `constructedWith`, a separate prototype mock is created for each distinct set of argument matchers. You must use the **same matchers** in both `every` and `verify`. Mismatched matchers will not find the correct prototype and the verification will fail.
+</Warning>
+
+### Constructor arguments that are mocks
+
+When a constructor argument is itself a mock, use `SameInstanceMatcher` (reference equality) and reuse the same matcher instance in both `every` and `verify`:
+
+```kotlin
+mockkConstructor(Intent::class)
+
+val uri = mockk<Uri>()
+val uriMatcher = SameInstanceMatcher(uri)
+
+every {
+    constructedWith<Intent>(EqMatcher(Intent.ACTION_VIEW), uriMatcher).setFlags(any())
+} returns mockk()
+
+verify {
+    constructedWith<Intent>(EqMatcher(Intent.ACTION_VIEW), uriMatcher).setFlags(any())
+}
+```
+
+## Cleanup
+
+| Function | What it does |
+|---|---|
+| `unmockkConstructor(MockCls::class)` | Restores the constructor to its original behavior. |
+| `clearConstructorMockk(MockCls::class)` | Clears recorded calls and stubs without restoring the constructor. |
+| `unmockkAll()` | Unmocks all object, static, and constructor mocks. |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Extension functions" icon="puzzle-piece" href="/advanced/extension-functions">
+    Mock class-wide, object-wide, and module-wide extension functions.
+  </Card>
+  <Card title="Capturing arguments" icon="crosshairs" href="/advanced/capturing">
+    Capture arguments from mocked calls for richer assertions.
+  </Card>
+</CardGroup>

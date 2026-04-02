@@ -1,0 +1,96 @@
+---
+title: "Coroutines"
+description: "Mock suspend functions in Kotlin using MockK's coroutine-aware DSL functions."
+keywords: ["mockk", "coroutines", "coEvery", "coVerify", "suspend", "coJustAwait"]
+---
+
+MockK provides coroutine-aware variants of its core DSL functions. Use the `co`-prefixed versions whenever you are stubbing or verifying `suspend` functions.
+
+## Add the dependency
+
+Coroutine support requires `kotlinx-coroutines-core` on the test classpath.
+
+<CodeGroup>
+
+```kotlin Gradle KTS
+testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:x.x")
+```
+
+```xml Maven
+<dependency>
+    <groupId>org.jetbrains.kotlinx</groupId>
+    <artifactId>kotlinx-coroutines-core</artifactId>
+    <version>x.x</version>
+    <scope>test</scope>
+</dependency>
+```
+
+</CodeGroup>
+
+## Stubbing and verifying suspend functions
+
+Use `coEvery { }` to stub a suspend function and `coVerify { }` to verify it was called.
+
+```kotlin
+val car = mockk<Car>()
+
+coEvery { car.drive(Direction.NORTH) } returns Outcome.OK
+
+car.drive(Direction.NORTH) // returns OK
+
+coVerify { car.drive(Direction.NORTH) }
+```
+
+## Co-prefixed functions reference
+
+MockK provides coroutine-aware equivalents for every major DSL function:
+
+| Function | Description |
+|---|---|
+| `coEvery` | Starts a stubbing block for suspend functions. |
+| `coVerify` | Starts a verification block for suspend functions. |
+| `coVerifyAll` | Verifies all specified suspend calls were made (unordered). |
+| `coVerifyOrder` | Verifies suspend calls were made in a specific order. |
+| `coVerifySequence` | Verifies suspend calls were made in an exact sequence. |
+| `coMatch` | Matches a suspend function call using a predicate. |
+| `coAssert` | Asserts conditions inside a coroutine context. |
+| `coRun` | Runs a block inside a coroutine context. |
+| `coAnswers` | Provides a coroutine code block as the answer to a stub. |
+| `coInvoke` | Calls a matched argument in a coroutine context. |
+
+## Simulating a never-returning suspend function
+
+Use `coJustAwait` to stub a suspend function that should never return — for example, to test cancellation behavior. Run the test inside `runTest`, launch the call with `UnconfinedTestDispatcher`, and cancel the job when you are done.
+
+```kotlin
+runTest {
+    val car = mockk<Car>()
+
+    coJustAwait { car.drive(any()) } // car.drive(...) will never return
+
+    val job = launch(UnconfinedTestDispatcher()) {
+        car.drive(Direction.NORTH)
+    }
+
+    coVerify { car.drive(Direction.NORTH) }
+
+    job.cancelAndJoin() // Don't forget to cancel the job
+}
+```
+
+You can also write this as `coEvery { car.drive(any()) } just Awaits`.
+
+<Warning>
+Using a spy with a suspending function produces unexpected test results. See [mockk#554](https://github.com/mockk/mockk/issues/554) for details and workarounds.
+</Warning>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Static and object mocks" icon="cube" href="/advanced/static-and-object-mocks">
+    Mock Kotlin objects, enums, and static top-level functions.
+  </Card>
+  <Card title="Capturing arguments" icon="crosshairs" href="/advanced/capturing">
+    Capture call arguments with slots and lists for richer assertions.
+  </Card>
+</CardGroup>

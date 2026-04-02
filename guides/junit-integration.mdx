@@ -1,0 +1,206 @@
+---
+title: 'JUnit integration'
+description: 'Set up MockK with JUnit 4 rules and JUnit 5 extensions for automatic mock lifecycle management.'
+keywords: ['mockk', 'junit', 'junit4', 'junit5', 'MockKRule', 'MockKExtension', 'annotations']
+---
+
+MockK provides first-class integrations for both JUnit 4 and JUnit 5 that handle mock initialization and cleanup automatically.
+
+## JUnit 4
+
+JUnit 4 exposes a rule-based API for hooking into the test lifecycle. MockK includes `MockKRule`, which initializes your annotated mock fields before each test and cleans up after — eliminating the need to call `MockKAnnotations.init(this)` manually.
+
+### Setup
+
+Declare `MockKRule` as a JUnit rule using `@get:Rule`:
+
+```kotlin
+class CarTest {
+    @get:Rule
+    val mockkRule = MockKRule(this)
+
+    @MockK
+    lateinit var car1: Car
+
+    @RelaxedMockK
+    lateinit var car2: Car
+
+    @Test
+    fun something() {
+        every { car1.drive() } just Runs
+        every { car2.changeGear(any()) } returns true
+        // ...
+    }
+}
+```
+
+`MockKRule` replaces the `@Before` setup method that would otherwise call `MockKAnnotations.init(this)`.
+
+---
+
+## JUnit 5
+
+In JUnit 5, use `@ExtendWith(MockKExtension::class)` to initialize annotated mock fields and handle cleanup automatically.
+
+### Basic usage
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+class CarTest {
+    @MockK
+    lateinit var car1: Car
+
+    @RelaxedMockK
+    lateinit var car2: Car
+
+    @MockK(relaxUnitFun = true)
+    lateinit var car3: Car
+
+    @SpyK
+    var car4 = Car()
+
+    @Test
+    fun calculateAddsValues1() {
+        // use car1, car2, car3, and car4
+    }
+}
+```
+
+### Mocks as test function parameters
+
+`MockKExtension` also supports `@MockK` and `@RelaxedMockK` directly on test function parameters:
+
+```kotlin
+@Test
+fun calculateAddsValues1(@MockK car1: Car, @RelaxedMockK car2: Car) {
+    // use car1 and car2
+}
+```
+
+### Automatic cleanup
+
+After each test class execution, `MockKExtension` calls `unmockkAll()` and `clearAllMocks()` in an `@AfterAll` callback. To disable this cleanup, annotate your class with `@MockKExtension.KeepMocks` or set the property globally:
+
+```properties
+mockk.junit.extension.keepmocks=true
+```
+
+### Thread safety for parallel tests
+
+`clearAllMocks()` is not thread-safe by default (`currentThreadOnly=false`). When running tests in parallel, add `@MockKExtension.RequireParallelTesting` to your class or set the property:
+
+```properties
+mockk.junit.extension.requireParallelTesting=true
+```
+
+This disables the `@AfterAll` call to `clearAllMocks`. If you call `clearAllMocks` explicitly in your tests, use the thread-safe variant instead:
+
+```kotlin
+clearAllMocks(currentThreadOnly = true)
+```
+
+This clears only mocks created within the same thread.
+
+### Automatic verification confirmation
+
+Annotate your class with `@MockKExtension.ConfirmVerification` to have `confirmVerified` called on all mocks after each test:
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+@MockKExtension.ConfirmVerification
+class CarTest {
+    // confirmVerified is called automatically after each test
+}
+```
+
+<Note>
+Automatic `confirmVerified` may not behave as expected when running tests from an IDE. Gradle handles the exception thrown on failure; the IDE may not surface it correctly.
+</Note>
+
+### Automatic unnecessary stubbing check
+
+Annotate your class with `@MockKExtension.CheckUnnecessaryStub` to have `checkUnnecessaryStub` called on all mocks after each test:
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+@MockKExtension.CheckUnnecessaryStub
+class CarTest {
+    // checkUnnecessaryStub is called automatically after each test
+}
+```
+
+### Declarative dependency order
+
+Annotate your class with `@MockKExtension.UseDependencyOrder` to enable topological `@InjectMockKs` resolution for all test instances in the class:
+
+```kotlin
+@ExtendWith(MockKExtension::class)
+@MockKExtension.UseDependencyOrder
+class TrafficSystemTest {
+    @MockK
+    lateinit var car1: Car
+
+    @InjectMockKs
+    var trafficSystem = TrafficSystem()
+}
+```
+
+This is equivalent to calling `MockKAnnotations.init(this, useDependencyOrder = true)` in a `@BeforeEach` method.
+
+---
+
+## `@InjectMockKs` dependency order
+
+When multiple `@InjectMockKs` properties depend on each other through constructor parameters, initialization order matters. By default MockK processes them in reflection order. To resolve dependencies deterministically, enable dependency order:
+
+```kotlin
+@Before
+fun setUp() = MockKAnnotations.init(this, useDependencyOrder = true)
+```
+
+MockK applies a topological sort across all `@InjectMockKs` fields and injects them in dependency order. If two fields have a circular dependency, MockK throws `MockKException` rather than silently producing incorrect behavior.
+
+<Note>
+Enabling `useDependencyOrder` adds an approximate 3–5% performance overhead during initialization. This is negligible for most test suites but worth noting for very large suites with many `@InjectMockKs` fields.
+</Note>
+
+### Annotations reference
+
+| Annotation | Description |
+|---|---|
+| `@MockK` | Creates a strict mock. |
+| `@RelaxedMockK` | Creates a relaxed mock that returns default values for all functions. |
+| `@SpyK` | Creates a spy that delegates to the real implementation by default. |
+| `@InjectMockKs` | Injects mocks into the annotated object by matching on property name, then type. |
+| `@OverrideMockKs` | Like `@InjectMockKs` with `overrideValues = true` and `injectImmutable = true`. |
+
+```kotlin
+class CarTest {
+    @MockK
+    lateinit var car1: Car
+
+    @RelaxedMockK
+    lateinit var car2: Car
+
+    @MockK(relaxUnitFun = true)
+    lateinit var car3: Car
+
+    @SpyK
+    var car4 = Car()
+
+    @InjectMockKs
+    var trafficSystem = TrafficSystem()
+
+    @Before
+    fun setUp() = MockKAnnotations.init(this, relaxUnitFun = true)
+
+    @Test
+    fun calculateAddsValues1() {
+        // use car1, car2, car3, car4, and trafficSystem
+    }
+}
+```
+
+Injection first matches by property name, then by class or superclass. Properties are injected even if they are `private`. Constructors are selected from the largest number of arguments to the smallest.
+
+By default, `@InjectMockKs` only injects `lateinit var`s or unassigned `var`s. Use `overrideValues = true` to inject even already-initialized properties, and `injectImmutable = true` to inject `val`s.
